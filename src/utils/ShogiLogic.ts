@@ -1,6 +1,6 @@
 import {
   PieceType, Player, Piece, Position, Move, GameState, CapturedPieces,
-  PROMOTION_MAP, UNPROMOTION_MAP, canPromote, getBaseType, isPromoted
+  PROMOTION_MAP, canPromote, getBaseType, isPromoted
 } from '../models/ShogiTypes';
 
 // 初期盤面の生成
@@ -299,6 +299,14 @@ export function getDropPositions(
           }
         }
         if (hasPawnInCol) continue;
+
+        // 打ち歩詰めチェック
+        const testBoard = cloneBoard(board);
+        testBoard[row][col] = { type: PieceType.Pawn, owner: player };
+        const opponent = player === Player.Sente ? Player.Gote : Player.Sente;
+        if (isInCheck(testBoard, opponent) && isCheckmatedOnBoard(testBoard, opponent, { [Player.Sente]: [], [Player.Gote]: [] })) {
+          continue;
+        }
       }
 
       positions.push({ row, col });
@@ -367,8 +375,8 @@ export function executeMove(state: GameState, move: Move): GameState {
   };
 }
 
-// 詰みチェック
-function isCheckmated(
+// 詰みチェック（盤面のみ、持ち駒なし - 打ち歩詰め判定用）
+function isCheckmatedOnBoard(
   board: (Piece | null)[][],
   player: Player,
   captured: CapturedPieces
@@ -407,6 +415,15 @@ function isCheckmated(
   return true;
 }
 
+// 詰みチェック（フル版）
+function isCheckmated(
+  board: (Piece | null)[][],
+  player: Player,
+  captured: CapturedPieces
+): boolean {
+  return isCheckmatedOnBoard(board, player, captured);
+}
+
 // 合法手かチェック（自玉が王手にならないか）
 export function isLegalMove(
   board: (Piece | null)[][],
@@ -430,7 +447,78 @@ export function isLegalMove(
   return !isInCheck(testBoard, piece.owner);
 }
 
-// AI（ランダム）の手を取得
+// 駒の価値
+const PIECE_VALUES: Record<PieceType, number> = {
+  [PieceType.King]: 10000,
+  [PieceType.Rook]: 1000,
+  [PieceType.Bishop]: 900,
+  [PieceType.Gold]: 500,
+  [PieceType.Silver]: 450,
+  [PieceType.Knight]: 300,
+  [PieceType.Lance]: 250,
+  [PieceType.Pawn]: 100,
+  [PieceType.PromotedRook]: 1300,
+  [PieceType.PromotedBishop]: 1200,
+  [PieceType.PromotedSilver]: 510,
+  [PieceType.PromotedKnight]: 510,
+  [PieceType.PromotedLance]: 510,
+  [PieceType.PromotedPawn]: 520,
+};
+
+// 手の評価値を計算
+function evaluateMove(state: GameState, move: Move): number {
+  let score = 0;
+  const player = state.currentPlayer;
+  const opponent = player === Player.Sente ? Player.Gote : Player.Sente;
+
+  // 駒を取る手を高評価
+  const target = state.board[move.to.row][move.to.col];
+  if (target) {
+    score += PIECE_VALUES[target.type] * 2;
+    // MVV-LVA: 価値の低い駒で高い駒を取るほど良い
+    score += PIECE_VALUES[target.type] - PIECE_VALUES[move.piece.type] * 0.1;
+  }
+
+  // 成る手を評価
+  if (move.promoted) {
+    const promotedType = PROMOTION_MAP[move.piece.type];
+    if (promotedType) {
+      score += PIECE_VALUES[promotedType] - PIECE_VALUES[move.piece.type];
+    }
+  }
+
+  // 移動後に王手がかかるか確認
+  const testBoard = cloneBoard(state.board);
+  if (move.from) {
+    testBoard[move.from.row][move.from.col] = null;
+  }
+  let placedPiece = { ...move.piece };
+  if (move.promoted && PROMOTION_MAP[move.piece.type]) {
+    placedPiece.type = PROMOTION_MAP[move.piece.type]!;
+  }
+  testBoard[move.to.row][move.to.col] = placedPiece;
+  if (isInCheck(testBoard, opponent)) {
+    score += 150;
+  }
+
+  // 中央寄りのポジションをやや優先（金銀など）
+  if (move.piece.type === PieceType.Gold || move.piece.type === PieceType.Silver) {
+    const centerDist = Math.abs(move.to.col - 4) + Math.abs(move.to.row - 4);
+    score += (8 - centerDist) * 5;
+  }
+
+  // 歩を前進させる
+  if (move.piece.type === PieceType.Pawn) {
+    score += 10;
+  }
+
+  // ランダム要素を追加（同じ評価値の手に変化をつける）
+  score += Math.random() * 50;
+
+  return score;
+}
+
+// AIの手を取得（評価関数付き）
 export function getAIMove(state: GameState): Move | null {
   const player = state.currentPlayer;
   const allMoves: Move[] = [];
@@ -443,14 +531,33 @@ export function getAIMove(state: GameState): Move | null {
         const moves = getValidMoves(state.board, { row, col }, piece);
         for (const to of moves) {
           if (isLegalMove(state.board, { row, col }, to, piece)) {
-            const shouldPromote = canPromoteMove(piece, row, to.row) &&
-              (mustPromote(piece, to.row) || Math.random() > 0.3);
-            allMoves.push({
-              from: { row, col },
-              to,
-              piece,
-              promoted: shouldPromote,
-            });
+            const canProm = canPromoteMove(piece, row, to.row);
+            const mustProm = mustPromote(piece, to.row);
+
+            if (canProm) {
+              // 成る手と成らない手の両方を候補に
+              allMoves.push({
+                from: { row, col },
+                to,
+                piece,
+                promoted: true,
+              });
+              if (!mustProm) {
+                allMoves.push({
+                  from: { row, col },
+                  to,
+                  piece,
+                  promoted: false,
+                });
+              }
+            } else {
+              allMoves.push({
+                from: { row, col },
+                to,
+                piece,
+                promoted: false,
+              });
+            }
           }
         }
       }
@@ -476,15 +583,15 @@ export function getAIMove(state: GameState): Move | null {
 
   if (allMoves.length === 0) return null;
 
-  // 簡易評価：駒を取れる手を優先
-  const captureMoves = allMoves.filter(m => {
-    const target = state.board[m.to.row][m.to.col];
-    return target !== null;
-  });
+  // 各手を評価してソート
+  const scoredMoves = allMoves.map(move => ({
+    move,
+    score: evaluateMove(state, move),
+  }));
+  scoredMoves.sort((a, b) => b.score - a.score);
 
-  if (captureMoves.length > 0 && Math.random() > 0.3) {
-    return captureMoves[Math.floor(Math.random() * captureMoves.length)];
-  }
-
-  return allMoves[Math.floor(Math.random() * allMoves.length)];
+  // 上位の手からランダムに選択（多少のランダム性を保持）
+  const topN = Math.min(3, scoredMoves.length);
+  const idx = Math.floor(Math.random() * topN);
+  return scoredMoves[idx].move;
 }

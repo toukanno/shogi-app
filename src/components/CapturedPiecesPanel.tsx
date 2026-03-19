@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieceType, Player, PIECE_NAMES } from '../models/ShogiTypes';
+import { PieceType, Player } from '../models/ShogiTypes';
 import ShogiPiece from './ShogiPiece';
 
 interface CapturedPiecesPanelProps {
