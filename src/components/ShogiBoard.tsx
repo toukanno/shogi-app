@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Piece, PieceType, Player, Position, GameState, Move
 } from '../models/ShogiTypes';
@@ -29,6 +29,24 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
   const [lastMove, setLastMove] = useState<Move | null>(null);
 
   const cellSize = boardSize / 9;
+
+  const applyMove = useCallback((move: Move) => {
+    const newState = executeMove(gameState, move);
+    setLastMove(move);
+    onMove(newState);
+
+    // AI の番
+    if (vsAI && !newState.isGameOver) {
+      setTimeout(() => {
+        const aiMove = getAIMove(newState);
+        if (aiMove) {
+          const aiState = executeMove(newState, aiMove);
+          setLastMove(aiMove);
+          onMove(aiState);
+        }
+      }, 500);
+    }
+  }, [gameState, onMove, vsAI]);
 
   const handleCellClick = useCallback((row: number, col: number) => {
     if (gameState.isGameOver) return;
@@ -92,7 +110,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
       setSelectedPos(null);
       setValidMoves([]);
     }
-  }, [gameState, selectedPos, selectedDrop, validMoves, promotionChoice]);
+  }, [gameState, selectedPos, selectedDrop, validMoves, promotionChoice, applyMove]);
 
   const handleDropSelect = useCallback((pieceType: PieceType) => {
     if (gameState.isGameOver) return;
@@ -120,25 +138,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
     setPromotionChoice(null);
     setSelectedPos(null);
     setValidMoves([]);
-  }, [promotionChoice]);
-
-  const applyMove = useCallback((move: Move) => {
-    const newState = executeMove(gameState, move);
-    setLastMove(move);
-    onMove(newState);
-
-    // AI の番
-    if (vsAI && !newState.isGameOver) {
-      setTimeout(() => {
-        const aiMove = getAIMove(newState);
-        if (aiMove) {
-          const aiState = executeMove(newState, aiMove);
-          setLastMove(aiMove);
-          onMove(aiState);
-        }
-      }, 500);
-    }
-  }, [gameState, onMove, vsAI]);
+  }, [promotionChoice, applyMove]);
 
   // 盤面座標の表示
   const colLabels = ['9', '8', '7', '6', '5', '4', '3', '2', '1'];

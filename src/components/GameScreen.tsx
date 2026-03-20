@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, Player, PIECE_NAMES } from '../models/ShogiTypes';
+import { GameState, Player, Move, PIECE_NAMES } from '../models/ShogiTypes';
 import { createInitialState } from '../utils/ShogiLogic';
 import ShogiBoard from './ShogiBoard';
 
@@ -34,6 +34,19 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
   const handleReset = () => {
     setGameState(createInitialState());
     setMoveCount(0);
+  };
+
+  const [showHistory, setShowHistory] = useState(false);
+
+  const formatMove = (move: Move, idx: number): string => {
+    const player = move.piece.owner === Player.Sente ? '☗' : '☖';
+    const col = 9 - move.to.col;
+    const rowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    const rowStr = rowLabels[move.to.row];
+    const pieceName = PIECE_NAMES[move.piece.type];
+    const promoted = move.promoted ? '成' : '';
+    const drop = move.from === null ? '打' : '';
+    return `${idx + 1}. ${player}${col}${rowStr}${pieceName}${promoted}${drop}`;
   };
 
   const currentPlayerLabel = gameState.currentPlayer === Player.Sente ? '☗先手' : '☖後手';
@@ -103,22 +116,42 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
           </div>
         </div>
 
-        <button
-          onClick={handleReset}
-          style={{
-            padding: '8px 16px',
-            background: 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
-            border: '1px solid #6b4c1e',
-            borderRadius: '8px',
-            color: '#e8d5a8',
-            fontSize: '14px',
-            fontFamily: '"Noto Sans JP", sans-serif',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-        >
-          初手
-        </button>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            style={{
+              padding: '8px 12px',
+              background: showHistory
+                ? 'linear-gradient(180deg, #6b4c1e 0%, #4a3520 100%)'
+                : 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+              border: '1px solid #6b4c1e',
+              borderRadius: '8px',
+              color: '#e8d5a8',
+              fontSize: '14px',
+              fontFamily: '"Noto Sans JP", sans-serif',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            棋譜
+          </button>
+          <button
+            onClick={handleReset}
+            style={{
+              padding: '8px 12px',
+              background: 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+              border: '1px solid #6b4c1e',
+              borderRadius: '8px',
+              color: '#e8d5a8',
+              fontSize: '14px',
+              fontFamily: '"Noto Sans JP", sans-serif',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            初手
+          </button>
+        </div>
       </div>
 
       {/* 盤面 */}
@@ -128,6 +161,47 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
         vsAI={vsAI}
         boardSize={boardSize}
       />
+
+      {/* 棋譜パネル */}
+      {showHistory && gameState.moveHistory.length > 0 && (
+        <div style={{
+          width: '100%',
+          maxWidth: '520px',
+          marginTop: '8px',
+          background: 'linear-gradient(180deg, rgba(42,24,16,0.95) 0%, rgba(26,8,0,0.95) 100%)',
+          borderRadius: '10px',
+          border: '1px solid #6b4c1e',
+          padding: '10px 14px',
+          maxHeight: '150px',
+          overflowY: 'auto',
+        }}>
+          <div style={{
+            color: '#ffd700',
+            fontSize: '12px',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            fontWeight: 'bold',
+            marginBottom: '6px',
+          }}>
+            棋譜
+          </div>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px 12px',
+          }}>
+            {gameState.moveHistory.map((move, idx) => (
+              <span key={idx} style={{
+                fontSize: '12px',
+                color: move.piece.owner === Player.Sente ? '#e8d5a8' : '#a0c0e8',
+                fontFamily: '"Noto Sans JP", sans-serif',
+                whiteSpace: 'nowrap',
+              }}>
+                {formatMove(move, idx)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 勝利ダイアログ */}
       {gameState.isGameOver && (
