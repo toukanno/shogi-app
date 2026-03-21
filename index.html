@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>将棋</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1410;color:#e0d5c0;font-family:'Segoe UI','Hiragino Kaku Gothic Pro',sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px}
+h1{font-size:1.5rem;color:#d4a55a;margin-bottom:6px}
+#info{font-size:.85rem;margin-bottom:6px;color:#bfa76a}
+#board{display:grid;grid-template-columns:repeat(9,1fr);gap:1px;background:#8b6914;padding:2px;border-radius:4px;width:min(95vw,450px);aspect-ratio:1}
+.cell{background:#dcc88a;display:flex;align-items:center;justify-content:center;font-size:min(4.5vw,22px);cursor:pointer;position:relative;aspect-ratio:1;border:1px solid #c4a85a;transition:background .15s}
+.cell:hover{background:#e8dca0}
+.cell.selected{background:#a0d8a0;box-shadow:inset 0 0 8px rgba(0,180,0,.4)}
+.cell.movable{background:#d8d8a0}
+.piece{display:flex;align-items:center;justify-content:center;width:90%;height:90%;position:relative}
+.piece.p2{transform:rotate(180deg)}
+.piece-char{font-weight:bold}
+#captured{display:flex;gap:20px;margin-top:8px;width:min(95vw,450px)}
+.cap-area{flex:1;min-height:40px;background:#2a2018;border-radius:6px;padding:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start}
+.cap-area h3{width:100%;font-size:.7rem;color:#bfa76a;margin-bottom:2px}
+.cap-piece{background:#dcc88a;color:#1a1410;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;font-size:.8rem;font-weight:bold}
+.cap-piece.selected{background:#a0d8a0}
+.cap-piece.p2{transform:rotate(180deg)}
+#status{margin-top:8px;font-size:.9rem;color:#d4a55a}
+button{margin-top:8px;padding:8px 24px;background:#d4a55a;color:#1a1410;border:none;border-radius:6px;font-size:.9rem;cursor:pointer;font-weight:bold}
+button:hover{background:#e8bc6a}
+</style>
+</head>
+<body>
+<h1>将棋</h1>
+<div id="info">先手の番</div>
+<div id="board"></div>
+<div id="captured">
+  <div class="cap-area" id="cap0"><h3>先手の持ち駒</h3></div>
+  <div class="cap-area" id="cap1"><h3>後手の持ち駒</h3></div>
+</div>
+<div id="status"></div>
+<button onclick="initGame()">最初から</button>
+<script>
+const PIECES={ou:'王',hi:'飛',kaku:'角',kin:'金',gin:'銀',kei:'桂',kyo:'香',fu:'歩',
+  ryu:'竜',uma:'馬',ngin:'全',nkei:'圭',nkyo:'杏',to:'と'};
+const PROMOTE={hi:'ryu',kaku:'uma',gin:'ngin',kei:'nkei',kyo:'nkyo',fu:'to'};
+const DEMOTE={ryu:'hi',uma:'kaku',ngin:'gin',nkei:'kei',nkyo:'kyo',to:'fu'};
+const DISPLAY={ou:'王',hi:'飛',kaku:'角',kin:'金',gin:'銀',kei:'桂',kyo:'香',fu:'歩',ryu:'竜',uma:'馬',ngin:'全',nkei:'圭',nkyo:'杏',to:'と'};
+
+let board,turn,selected,captured,dropPiece;
+
+function initGame(){
+  turn=0;selected=null;dropPiece=null;captured=[[],[]];
+  board=Array.from({length:9},()=>Array(9).fill(null));
+  // Initial setup
+  const back=['kyo','kei','gin','kin','ou','kin','gin','kei','kyo'];
+  for(let c=0;c<9;c++){board[0][c]={type:back[c],player:1};board[8][c]={type:back[c],player:0}}
+  board[1][1]={type:'kaku',player:1};board[1][7]={type:'hi',player:1};
+  board[7][1]={type:'hi',player:0};board[7][7]={type:'kaku',player:0};
+  for(let c=0;c<9;c++){board[2][c]={type:'fu',player:1};board[6][c]={type:'fu',player:0}}
+  render();
+}
+
+function getMoves(r,c){
+  const p=board[r][c];if(!p)return[];
+  const moves=[];const d=p.player===0?-1:1;
+  function add(dr,dc,slide=false){
+    let nr=r+dr,nc=c+dc;
+    while(nr>=0&&nr<9&&nc>=0&&nc<9){
+      if(board[nr][nc]){if(board[nr][nc].player!==p.player)moves.push([nr,nc]);break}
+      moves.push([nr,nc]);if(!slide)break;nr+=dr;nc+=dc;
+    }
+  }
+  const t=p.type;
+  if(t==='fu')add(d,0);
+  if(t==='kyo'){let nr=r+d;while(nr>=0&&nr<9){if(board[nr][c]){if(board[nr][c].player!==p.player)moves.push([nr,c]);break}moves.push([nr,c]);nr+=d}}
+  if(t==='kei'){add(d*2,-1);add(d*2,1)}
+  if(t==='gin'){add(d,-1);add(d,0);add(d,1);add(-d,-1);add(-d,1)}
+  if(t==='kin'||t==='to'||t==='ngin'||t==='nkei'||t==='nkyo'){add(d,-1);add(d,0);add(d,1);add(0,-1);add(0,1);add(-d,0)}
+  if(t==='ou'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if(dr||dc)add(dr,dc)}
+  if(t==='hi'||t==='ryu'){add(-1,0,true);add(1,0,true);add(0,-1,true);add(0,1,true)}
+  if(t==='kaku'||t==='uma'){add(-1,-1,true);add(-1,1,true);add(1,-1,true);add(1,1,true)}
+  if(t==='ryu'){add(-1,-1);add(-1,1);add(1,-1);add(1,1)}
+  if(t==='uma'){add(-1,0);add(1,0);add(0,-1);add(0,1)}
+  return moves;
+}
+
+function canPromote(type,fromR,toR,player){
+  if(!PROMOTE[type])return false;
+  const zone=player===0?[0,1,2]:[6,7,8];
+  return zone.includes(fromR)||zone.includes(toR);
+}
+
+function mustPromote(type,toR,player){
+  if(type==='fu'||type==='kyo')return player===0?toR===0:toR===8;
+  if(type==='kei')return player===0?toR<=1:toR>=7;
+  return false;
+}
+
+function render(){
+  const boardEl=document.getElementById('board');
+  boardEl.innerHTML='';
+  const validMoves=selected?getMoves(selected[0],selected[1]):[];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const cell=document.createElement('div');cell.className='cell';
+    const isSelected=selected&&selected[0]===r&&selected[1]===c;
+    const isMovable=validMoves.some(m=>m[0]===r&&m[1]===c);
+    if(isSelected)cell.classList.add('selected');
+    if(isMovable)cell.classList.add('movable');
+    if(board[r][c]){
+      const span=document.createElement('span');
+      span.className=`piece ${board[r][c].player===1?'p2':''}`;
+      span.innerHTML=`<span class="piece-char">${DISPLAY[board[r][c].type]}</span>`;
+      cell.appendChild(span);
+    }
+    cell.onclick=()=>cellClick(r,c);
+    boardEl.appendChild(cell);
+  }
+  // Captured
+  for(let pl=0;pl<2;pl++){
+    const area=document.getElementById('cap'+pl);
+    area.innerHTML=`<h3>${pl===0?'先手':'後手'}の持ち駒</h3>`;
+    captured[pl].forEach((type,i)=>{
+      const d=document.createElement('div');
+      d.className=`cap-piece ${pl===1?'p2':''} ${dropPiece&&dropPiece.player===pl&&dropPiece.idx===i?'selected':''}`;
+      d.textContent=DISPLAY[type];
+      d.onclick=()=>{if(turn===pl){dropPiece={player:pl,idx:i,type};selected=null;render()}};
+      area.appendChild(d);
+    });
+  }
+  document.getElementById('info').textContent=(turn===0?'先手':'後手')+'の番';
+}
+
+function cellClick(r,c){
+  // Dropping a captured piece
+  if(dropPiece&&turn===dropPiece.player){
+    if(!board[r][c]){
+      // Can't drop fu on column with existing fu
+      if(dropPiece.type==='fu'){
+        const hasFu=board.some(row=>row[c]&&row[c].type==='fu'&&row[c].player===turn);
+        if(hasFu){document.getElementById('status').textContent='二歩は禁止です';return}
+      }
+      board[r][c]={type:dropPiece.type,player:turn};
+      captured[turn].splice(dropPiece.idx,1);
+      dropPiece=null;turn=1-turn;render();return;
+    }
+    dropPiece=null;render();return;
+  }
+  if(selected){
+    const moves=getMoves(selected[0],selected[1]);
+    if(moves.some(m=>m[0]===r&&m[1]===c)){
+      const piece=board[selected[0]][selected[1]];
+      if(board[r][c]){
+        let capType=board[r][c].type;
+        if(DEMOTE[capType])capType=DEMOTE[capType];
+        captured[turn].push(capType);
+        if(board[r][c].type==='ou'){document.getElementById('status').textContent=(turn===0?'先手':'後手')+'の勝ち!'}
+      }
+      board[r][c]=piece;board[selected[0]][selected[1]]=null;
+      if(mustPromote(piece.type,r,turn)){piece.type=PROMOTE[piece.type]}
+      else if(canPromote(piece.type,selected[0],r,turn)){if(confirm('成りますか?'))piece.type=PROMOTE[piece.type]}
+      selected=null;turn=1-turn;render();
+    }else if(board[r][c]&&board[r][c].player===turn){
+      selected=[r,c];dropPiece=null;render();
+    }else{selected=null;render()}
+  }else{
+    if(board[r][c]&&board[r][c].player===turn){selected=[r,c];dropPiece=null;render()}
+  }
+}
+initGame();
+</script>
+</body>
+</html>
