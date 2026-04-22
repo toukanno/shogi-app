@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Piece, PieceType, Player, Position, GameState, Move
 } from '../models/ShogiTypes';
@@ -15,9 +15,12 @@ interface ShogiBoardProps {
   onMove: (newState: GameState) => void;
   vsAI: boolean;
   boardSize: number;
+  interactionDisabled?: boolean;
 }
 
-const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardSize }) => {
+const ShogiBoard: React.FC<ShogiBoardProps> = ({
+  gameState, onMove, vsAI, boardSize, interactionDisabled = false,
+}) => {
   const [selectedPos, setSelectedPos] = useState<Position | null>(null);
   const [selectedDrop, setSelectedDrop] = useState<PieceType | null>(null);
   const [validMoves, setValidMoves] = useState<Position[]>([]);
@@ -27,8 +30,17 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
     piece: Piece;
   } | null>(null);
   const [lastMove, setLastMove] = useState<Move | null>(null);
+  const aiTimerRef = useRef<number | null>(null);
 
   const cellSize = boardSize / 9;
+  const isAITurn = vsAI && gameState.currentPlayer === Player.Gote;
+  const isInteractionLocked = interactionDisabled || isAITurn;
+
+  useEffect(() => () => {
+    if (aiTimerRef.current !== null) {
+      window.clearTimeout(aiTimerRef.current);
+    }
+  }, []);
 
   const applyMove = useCallback((move: Move) => {
     const newState = executeMove(gameState, move);
@@ -37,13 +49,14 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
 
     // AI の番
     if (vsAI && !newState.isGameOver) {
-      setTimeout(() => {
+      aiTimerRef.current = window.setTimeout(() => {
         const aiMove = getAIMove(newState);
         if (aiMove) {
           const aiState = executeMove(newState, aiMove);
           setLastMove(aiMove);
           onMove(aiState);
         }
+        aiTimerRef.current = null;
       }, 500);
     }
   }, [gameState, onMove, vsAI]);
@@ -51,6 +64,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
   const handleCellClick = useCallback((row: number, col: number) => {
     if (gameState.isGameOver) return;
     if (promotionChoice) return;
+    if (isInteractionLocked) return;
 
     const clickedPiece = gameState.board[row][col];
 
@@ -110,10 +124,11 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
       setSelectedPos(null);
       setValidMoves([]);
     }
-  }, [gameState, selectedPos, selectedDrop, validMoves, promotionChoice, applyMove]);
+  }, [gameState, selectedPos, selectedDrop, validMoves, promotionChoice, applyMove, isInteractionLocked]);
 
   const handleDropSelect = useCallback((pieceType: PieceType) => {
     if (gameState.isGameOver) return;
+    if (isInteractionLocked) return;
     if (selectedDrop === pieceType) {
       setSelectedDrop(null);
       setValidMoves([]);
@@ -124,7 +139,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({ gameState, onMove, vsAI, boardS
     const drops = getDropPositions(gameState.board, pieceType, gameState.currentPlayer)
       .filter(pos => isLegalMove(gameState.board, null, pos, { type: pieceType, owner: gameState.currentPlayer }));
     setValidMoves(drops);
-  }, [gameState, selectedDrop]);
+  }, [gameState, selectedDrop, isInteractionLocked]);
 
   const handlePromotion = useCallback((promote: boolean) => {
     if (!promotionChoice) return;
