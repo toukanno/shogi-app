@@ -9,9 +9,20 @@ interface GameScreenProps {
 }
 
 const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
-  const [gameState, setGameState] = useState<GameState>(createInitialState());
-  const [moveCount, setMoveCount] = useState(0);
+  const storageKey = vsAI ? 'shogi-app-save-ai' : 'shogi-app-save-pvp';
+  const [gameState, setGameState] = useState<GameState>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        return JSON.parse(saved) as GameState;
+      }
+    } catch (error) {
+      console.warn('保存データの読み込みに失敗しました', error);
+    }
+    return createInitialState();
+  });
   const [boardSize, setBoardSize] = useState(360);
+  const [isSaved, setIsSaved] = useState(false);
 
   // レスポンシブ盤面サイズ
   useEffect(() => {
@@ -28,15 +39,27 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
 
   const handleMove = useCallback((newState: GameState) => {
     setGameState(newState);
-    setMoveCount(prev => prev + 1);
+    setIsSaved(false);
   }, []);
 
   const handleReset = () => {
     setGameState(createInitialState());
-    setMoveCount(0);
+    setIsSaved(false);
+    localStorage.removeItem(storageKey);
   };
 
   const [showHistory, setShowHistory] = useState(false);
+
+  const moveCount = gameState.moveHistory.length;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(gameState));
+      setIsSaved(true);
+    } catch (error) {
+      console.warn('保存データの保存に失敗しました', error);
+    }
+  }, [gameState, storageKey]);
 
   const formatMove = (move: Move, idx: number): string => {
     const player = move.piece.owner === Player.Sente ? '☗' : '☖';
@@ -112,7 +135,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
             fontSize: '11px',
             fontFamily: '"Noto Sans JP", sans-serif',
           }}>
-            {vsAI ? 'CPU対戦' : '二人対戦'} · {moveCount}手目
+            {vsAI ? 'CPU対戦' : '二人対戦'} · {moveCount}手目 · {isSaved ? '自動保存済み' : '保存中...'}
           </div>
         </div>
 
@@ -160,6 +183,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
         onMove={handleMove}
         vsAI={vsAI}
         boardSize={boardSize}
+        interactionDisabled={vsAI && gameState.currentPlayer === Player.Gote}
       />
 
       {/* 棋譜パネル */}
