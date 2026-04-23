@@ -271,9 +271,14 @@ export function canPromoteMove(piece: Piece, fromRow: number, toRow: number): bo
 export function getDropPositions(
   board: (Piece | null)[][],
   pieceType: PieceType,
-  player: Player
+  player: Player,
+  capturedPieces?: CapturedPieces
 ): Position[] {
   const positions: Position[] = [];
+  const capturedForJudge: CapturedPieces = capturedPieces ?? {
+    [Player.Sente]: [],
+    [Player.Gote]: [],
+  };
 
   for (let row = 0; row < 9; row++) {
     for (let col = 0; col < 9; col++) {
@@ -304,7 +309,7 @@ export function getDropPositions(
         const testBoard = cloneBoard(board);
         testBoard[row][col] = { type: PieceType.Pawn, owner: player };
         const opponent = player === Player.Sente ? Player.Gote : Player.Sente;
-        if (isInCheck(testBoard, opponent) && isCheckmatedOnBoard(testBoard, opponent, { [Player.Sente]: [], [Player.Gote]: [] })) {
+        if (isInCheck(testBoard, opponent) && isCheckmatedOnBoard(testBoard, opponent, capturedForJudge)) {
           continue;
         }
       }
@@ -402,7 +407,7 @@ function isCheckmatedOnBoard(
   // 持ち駒で合駒できるか確認
   const uniqueCaptured = Array.from(new Set(captured[player]));
   for (const pieceType of uniqueCaptured) {
-    const drops = getDropPositions(board, pieceType, player);
+    const drops = getDropPositions(board, pieceType, player, captured);
     for (const pos of drops) {
       const testBoard = cloneBoard(board);
       testBoard[pos.row][pos.col] = { type: pieceType, owner: player };
@@ -567,7 +572,7 @@ export function getAIMove(state: GameState): Move | null {
   // 持ち駒を打つ
   const uniqueCaptured = Array.from(new Set(state.capturedPieces[player]));
   for (const pieceType of uniqueCaptured) {
-    const drops = getDropPositions(state.board, pieceType, player);
+    const drops = getDropPositions(state.board, pieceType, player, state.capturedPieces);
     for (const pos of drops) {
       const piece: Piece = { type: pieceType, owner: player };
       if (isLegalMove(state.board, null, pos, piece)) {

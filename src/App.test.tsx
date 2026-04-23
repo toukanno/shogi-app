@@ -363,6 +363,20 @@ describe('Drop Rules', () => {
     const drops = getDropPositions(board, PieceType.Pawn, Player.Sente);
     expect(drops.some(p => p.col === 3)).toBe(false);
   });
+
+  test('打ち歩詰め判定では相手の持ち駒による受けも考慮する', () => {
+    const board: (Piece | null)[][] = Array(9).fill(null).map(() => Array(9).fill(null));
+    board[2][4] = { type: PieceType.King, owner: Player.Gote };
+    board[4][4] = { type: PieceType.Rook, owner: Player.Sente };
+    board[4][8] = { type: PieceType.King, owner: Player.Sente };
+
+    const capturedPieces = {
+      [Player.Sente]: [],
+      [Player.Gote]: [PieceType.Gold],
+    };
+    const drops = getDropPositions(board, PieceType.Pawn, Player.Sente, capturedPieces);
+    expect(drops.some(p => p.row === 3 && p.col === 4)).toBe(true);
+  });
 });
 
 describe('Legal Move (self-check prevention)', () => {
