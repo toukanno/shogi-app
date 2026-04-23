@@ -136,7 +136,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
     }
     setSelectedPos(null);
     setSelectedDrop(pieceType);
-    const drops = getDropPositions(gameState.board, pieceType, gameState.currentPlayer)
+    const drops = getDropPositions(gameState.board, pieceType, gameState.currentPlayer, gameState.capturedPieces)
       .filter(pos => isLegalMove(gameState.board, null, pos, { type: pieceType, owner: gameState.currentPlayer }));
     setValidMoves(drops);
   }, [gameState, selectedDrop, isInteractionLocked]);
