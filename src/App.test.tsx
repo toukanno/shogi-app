@@ -14,15 +14,17 @@ describe('App', () => {
 
   test('renders CPU and 2-player buttons', () => {
     render(<App />);
-    expect(screen.getByText(/CPU戦/)).toBeInTheDocument();
+    expect(screen.getByText(/CPU戦（あなた先手）/)).toBeInTheDocument();
+    expect(screen.getByText(/CPU戦（あなた後手）/)).toBeInTheDocument();
+    expect(screen.getByText(/AI観戦（両者CPU）/)).toBeInTheDocument();
     expect(screen.getByText(/二人対戦/)).toBeInTheDocument();
   });
 
   test('navigates to game screen on CPU button click', () => {
     render(<App />);
-    fireEvent.click(screen.getByText(/CPU戦/));
+    fireEvent.click(screen.getByText(/CPU戦（あなた先手）/));
     expect(screen.getByText(/先手の番/)).toBeInTheDocument();
-    expect(screen.getByText(/CPU対戦/)).toBeInTheDocument();
+    expect(screen.getByText(/CPU対戦（あなた先手）/)).toBeInTheDocument();
   });
 
   test('navigates to game screen on 2-player button click', () => {
@@ -34,7 +36,7 @@ describe('App', () => {
 
   test('back button returns to menu', () => {
     render(<App />);
-    fireEvent.click(screen.getByText(/CPU戦/));
+    fireEvent.click(screen.getByText(/CPU戦（あなた先手）/));
     fireEvent.click(screen.getByText(/← 戻る/));
     expect(screen.getByText('将棋')).toBeInTheDocument();
   });

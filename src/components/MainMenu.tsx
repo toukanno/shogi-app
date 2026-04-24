@@ -1,7 +1,8 @@
 import React from 'react';
+import { GameMode } from '../models/GameMode';
 
 interface MainMenuProps {
-  onStartGame: (vsAI: boolean) => void;
+  onStartGame: (mode: GameMode) => void;
 }
 
 const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
@@ -133,7 +134,7 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
       }}>
         {/* 対局（AI） */}
         <button
-          onClick={() => onStartGame(true)}
+          onClick={() => onStartGame('ai-sente')}
           style={{
             padding: '18px 32px',
             background: 'linear-gradient(180deg, #d42a2a 0%, #a01020 50%, #8b0000 100%)',
@@ -162,12 +163,62 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
           }}
         >
           <span style={{ fontSize: '28px' }}>⚔</span>
-          対局（CPU戦）
+          CPU戦（あなた先手）
+        </button>
+
+        <button
+          onClick={() => onStartGame('ai-gote')}
+          style={{
+            padding: '16px 32px',
+            background: 'linear-gradient(180deg, #4a3520 0%, #3a2510 50%, #2a1810 100%)',
+            border: '2px solid #8b6914',
+            borderRadius: '14px',
+            color: '#e8d5a8',
+            fontSize: 'clamp(18px, 4vw, 22px)',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            letterSpacing: '3px',
+          }}
+        >
+          <span style={{ fontSize: '24px' }}>🤖</span>
+          CPU戦（あなた後手）
+        </button>
+
+        <button
+          onClick={() => onStartGame('ai-vs-ai')}
+          style={{
+            padding: '16px 32px',
+            background: 'linear-gradient(180deg, #4a3520 0%, #3a2510 50%, #2a1810 100%)',
+            border: '2px solid #8b6914',
+            borderRadius: '14px',
+            color: '#e8d5a8',
+            fontSize: 'clamp(18px, 4vw, 22px)',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            letterSpacing: '3px',
+          }}
+        >
+          <span style={{ fontSize: '24px' }}>🎥</span>
+          AI観戦（両者CPU）
         </button>
 
         {/* 二人対戦 */}
         <button
-          onClick={() => onStartGame(false)}
+          onClick={() => onStartGame('pvp')}
           style={{
             padding: '16px 32px',
             background: 'linear-gradient(180deg, #4a3520 0%, #3a2510 50%, #2a1810 100%)',

@@ -2,14 +2,24 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Player, Move, PIECE_NAMES } from '../models/ShogiTypes';
 import { createInitialState } from '../utils/ShogiLogic';
 import ShogiBoard from './ShogiBoard';
+import { GameMode } from '../models/GameMode';
 
 interface GameScreenProps {
-  vsAI: boolean;
+  gameMode: GameMode;
   onBack: () => void;
 }
 
-const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
-  const storageKey = vsAI ? 'shogi-app-save-ai' : 'shogi-app-save-pvp';
+const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
+  const storageKey = `shogi-app-save-${gameMode}`;
+  const aiControlsSente = gameMode === 'ai-gote' || gameMode === 'ai-vs-ai';
+  const aiControlsGote = gameMode === 'ai-sente' || gameMode === 'ai-vs-ai';
+  const modeLabel = gameMode === 'pvp'
+    ? '二人対戦'
+    : gameMode === 'ai-sente'
+      ? 'CPU対戦（あなた先手）'
+      : gameMode === 'ai-gote'
+        ? 'CPU対戦（あなた後手）'
+        : 'AI観戦（両者CPU）';
   const [gameState, setGameState] = useState<GameState>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -135,7 +145,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
             fontSize: '11px',
             fontFamily: '"Noto Sans JP", sans-serif',
           }}>
-            {vsAI ? 'CPU対戦' : '二人対戦'} · {moveCount}手目 · {isSaved ? '自動保存済み' : '保存中...'}
+            {modeLabel} · {moveCount}手目 · {isSaved ? '自動保存済み' : '保存中...'}
           </div>
         </div>
 
@@ -181,9 +191,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
       <ShogiBoard
         gameState={gameState}
         onMove={handleMove}
-        vsAI={vsAI}
+        aiControlsSente={aiControlsSente}
+        aiControlsGote={aiControlsGote}
         boardSize={boardSize}
-        interactionDisabled={vsAI && gameState.currentPlayer === Player.Gote}
+        interactionDisabled={
+          (gameState.currentPlayer === Player.Sente && aiControlsSente)
+          || (gameState.currentPlayer === Player.Gote && aiControlsGote)
+        }
       />
 
       {/* 棋譜パネル */}
