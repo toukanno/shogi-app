@@ -21,10 +21,14 @@ Do **not** run `npm run eject`.
 
 ## Architecture
 
-Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and swaps between `MainMenu` and `GameScreen`. There is no global store — game state lives in `GameScreen` and is passed down.
+Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and a selected `GameMode`, then swaps between `MainMenu` and `GameScreen`. There is no global store — game state lives in `GameScreen` and is passed down.
+
+### Game modes
+`src/models/GameMode.ts` defines `type GameMode = 'pvp' | 'ai-sente' | 'ai-gote' | 'ai-vs-ai'`. `MainMenu` renders one button per mode; `GameScreen` translates the mode into two booleans (`aiControlsSente`, `aiControlsGote`) which it passes to `ShogiBoard`. `ai-sente` means *the user* plays Sente (so AI controls Gote); `ai-gote` is the inverse; `ai-vs-ai` is observer mode where both sides are AI.
 
 ### Pure logic vs. UI split
 - `src/models/ShogiTypes.ts` — enums (`PieceType`, `Player`), `Piece`/`Position`/`Move`/`GameState`/`CapturedPieces` interfaces, and the `PIECE_NAMES` / `PROMOTION_MAP` / `UNPROMOTION_MAP` lookup tables plus helpers (`canPromote`, `isPromoted`, `getBaseType`). All rule-facing code should import types/helpers from here.
+- `src/models/GameMode.ts` — the four-way `GameMode` union.
 - `src/utils/ShogiLogic.ts` — **pure, stateless** rules engine. Exported: `createInitialBoard`, `createInitialState`, `getValidMoves`, `isInCheck`, `mustPromote`, `canPromoteMove`, `getDropPositions`, `executeMove`, `isLegalMove`, `getAIMove`. Everything returns new boards/state; never mutate inputs. `executeMove` computes `isCheck` / `isCheckmate` and sets `winner` on checkmate.
 - `src/components/` — presentational React. `GameScreen` → `ShogiBoard` → (`ShogiPiece`, `CapturedPiecesPanel`, `PromotionDialog`).
 
@@ -37,19 +41,20 @@ Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and
 
 ### Move flow
 1. `ShogiBoard.handleCellClick` / `handleDropSelect` computes candidate squares via `getValidMoves` + `isLegalMove` (or `getDropPositions` + `isLegalMove` for drops), stores them in `validMoves`.
-2. On confirmation it builds a `Move` (with `from: null` + `dropPiece` for drops) and calls `executeMove` via `applyMove`.
+2. On confirmation it builds a `Move` (with `from: null` + `dropPiece` for drops) and calls `executeMove` via `applyMove`, which simply commits the new state through the `onMove` callback.
 3. If `canPromoteMove` is true but `mustPromote` is false, `PromotionDialog` is opened and the move is deferred until the user chooses.
-4. In vsAI mode, after Sente's move, `applyMove` schedules `getAIMove` → `executeMove` with a 500 ms `setTimeout` (tracked in `aiTimerRef` and cleared on unmount). `ShogiBoard` locks input when `currentPlayer === Gote && vsAI` via `isInteractionLocked`.
+4. AI scheduling is **state-driven, not event-driven**: a `useEffect` in `ShogiBoard` watches `gameState.currentPlayer` and, whenever the side to move is AI-controlled (and the game isn't over), it kicks off a 500 ms `setTimeout` that calls `getAIMove` → `executeMove` → `onMove`. The handle is held in `aiTimerRef` and cleared by the effect's cleanup on unmount or when the state/mode changes. This is what makes `ai-gote` (AI plays first) and `ai-vs-ai` (both sides AI, cascading moves) work — `applyMove` itself never schedules the next AI turn.
+5. `ShogiBoard` locks human input via `isInteractionLocked` whenever it is the AI's turn (or the parent passes `interactionDisabled`). `CapturedPiecesPanel` for an AI-controlled side renders as non-interactive (`isCurrentPlayer` is false even on its turn).
 
 ### AI
-`getAIMove` enumerates all legal moves (including promote/no-promote variants and drops), scores them with `evaluateMove` (MVV-LVA capture bonus, promotion delta, check bonus, mild positional terms, small random jitter), and picks randomly from the top 3. It is one-ply and intentionally lightweight — keep it fast enough to run synchronously inside the 500 ms delay.
+`getAIMove` runs an iterative-deepening **negamax search with αβ pruning** (`negamax` in `ShogiLogic.ts`). Defaults: `MAX_DEPTH = 3`, `TIME_BUDGET_MS = 800`. Each iteration re-orders the root moves by the previous depth's scores so the next iteration's αβ cuts harder. Move ordering inside `negamax` uses `moveOrderScore` (MVV-LVA capture priority + promotion delta + push-into-enemy-camp bias). The static evaluator `evaluatePosition` sums `PIECE_VALUES` on the board, weighted `HAND_VALUES` for captured pieces, a small enemy-camp bonus for unpromoted pieces, a center-distance term for gold/silver, and a check-pressure term. Mate scores use a `MATE_SCORE - depth` ramp so shorter mates beat longer ones. Top-tied moves (within `EPS = 5`) are kept and one is picked at random for variety. Time budget is enforced at every node by checking `Date.now() > deadline`. The 500 ms `setTimeout` in `ShogiBoard` is purely for visual pacing — total user-visible delay can reach ~500 ms + ~800 ms.
 
 ### Special rules implemented
-- 二歩 (nifu — two pawns on a file) and 打ち歩詰め (uchi-fu-zume — pawn drop mate) are enforced in `getDropPositions`. The latter uses `isCheckmatedOnBoard` with empty captured piece sets, which means it only checks on-board escape moves — be aware if you extend it.
+- 二歩 (nifu — two pawns on a file) and 打ち歩詰め (uchi-fu-zume — pawn drop mate) are enforced in `getDropPositions`. The drop-mate test calls `isCheckmatedOnBoard`, passing the *current* `capturedPieces` so opponent's hand-drop defenses are considered.
 - Checkmate detection is exhaustive across all legal moves and drops via `isCheckmatedOnBoard`.
 
 ### Persistence
-`GameScreen` auto-saves `GameState` to `localStorage` under `shogi-app-save-ai` or `shogi-app-save-pvp` after every move, and rehydrates on mount. Reset clears the relevant key. If you change the `GameState` shape, stale saves will deserialize into the new shape as-is — consider a version key or migration.
+`GameScreen` auto-saves `GameState` to `localStorage` under `shogi-app-save-${gameMode}` (so `pvp`, `ai-sente`, `ai-gote`, `ai-vs-ai` each have an independent save) after every state change, and rehydrates on mount. Reset clears the active key. If you change the `GameState` shape, stale saves will deserialize into the new shape as-is — consider a version key or migration. The previous `shogi-app-save-ai` / `shogi-app-save-pvp` keys are no longer read.
 
 ## Conventions
 
