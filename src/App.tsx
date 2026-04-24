@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import MainMenu from './components/MainMenu';
 import GameScreen from './components/GameScreen';
+import { GameMode } from './models/GameMode';
 
 type Screen = 'menu' | 'game';
 
 const App: React.FC = () => {
   const [screen, setScreen] = useState<Screen>('menu');
-  const [vsAI, setVsAI] = useState(true);
+  const [gameMode, setGameMode] = useState<GameMode>('ai-sente');
 
-  const handleStartGame = (ai: boolean) => {
-    setVsAI(ai);
+  const handleStartGame = (mode: GameMode) => {
+    setGameMode(mode);
     setScreen('game');
   };
 
@@ -28,7 +29,7 @@ const App: React.FC = () => {
       overscrollBehavior: 'none',
     } as React.CSSProperties}>
       {screen === 'menu' && <MainMenu onStartGame={handleStartGame} />}
-      {screen === 'game' && <GameScreen vsAI={vsAI} onBack={handleBack} />}
+      {screen === 'game' && <GameScreen gameMode={gameMode} onBack={handleBack} />}
     </div>
   );
 };

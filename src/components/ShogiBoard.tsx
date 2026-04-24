@@ -13,13 +13,14 @@ import PromotionDialog from './PromotionDialog';
 interface ShogiBoardProps {
   gameState: GameState;
   onMove: (newState: GameState) => void;
-  vsAI: boolean;
+  aiControlsSente: boolean;
+  aiControlsGote: boolean;
   boardSize: number;
   interactionDisabled?: boolean;
 }
 
 const ShogiBoard: React.FC<ShogiBoardProps> = ({
-  gameState, onMove, vsAI, boardSize, interactionDisabled = false,
+  gameState, onMove, aiControlsSente, aiControlsGote, boardSize, interactionDisabled = false,
 }) => {
   const [selectedPos, setSelectedPos] = useState<Position | null>(null);
   const [selectedDrop, setSelectedDrop] = useState<PieceType | null>(null);
@@ -33,7 +34,8 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
   const aiTimerRef = useRef<number | null>(null);
 
   const cellSize = boardSize / 9;
-  const isAITurn = vsAI && gameState.currentPlayer === Player.Gote;
+  const isAITurn = (gameState.currentPlayer === Player.Sente && aiControlsSente)
+    || (gameState.currentPlayer === Player.Gote && aiControlsGote);
   const isInteractionLocked = interactionDisabled || isAITurn;
 
   useEffect(() => () => {
@@ -47,8 +49,12 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
     setLastMove(move);
     onMove(newState);
 
+    const aiWillMoveNext = !newState.isGameOver && (
+      (newState.currentPlayer === Player.Sente && aiControlsSente)
+      || (newState.currentPlayer === Player.Gote && aiControlsGote)
+    );
     // AI の番
-    if (vsAI && !newState.isGameOver) {
+    if (aiWillMoveNext) {
       aiTimerRef.current = window.setTimeout(() => {
         const aiMove = getAIMove(newState);
         if (aiMove) {
@@ -59,7 +65,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
         aiTimerRef.current = null;
       }, 500);
     }
-  }, [gameState, onMove, vsAI]);
+  }, [gameState, onMove, aiControlsSente, aiControlsGote]);
 
   const handleCellClick = useCallback((row: number, col: number) => {
     if (gameState.isGameOver) return;
@@ -171,7 +177,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
       <CapturedPiecesPanel
         pieces={gameState.capturedPieces[Player.Gote]}
         player={Player.Gote}
-        isCurrentPlayer={gameState.currentPlayer === Player.Gote && !vsAI}
+        isCurrentPlayer={gameState.currentPlayer === Player.Gote && !aiControlsGote}
         selectedPiece={gameState.currentPlayer === Player.Gote ? selectedDrop : null}
         onSelectPiece={handleDropSelect}
         cellSize={cellSize}
