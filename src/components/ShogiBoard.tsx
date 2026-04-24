@@ -38,34 +38,34 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
     || (gameState.currentPlayer === Player.Gote && aiControlsGote);
   const isInteractionLocked = interactionDisabled || isAITurn;
 
-  useEffect(() => () => {
-    if (aiTimerRef.current !== null) {
-      window.clearTimeout(aiTimerRef.current);
-    }
-  }, []);
+  // AI の番なら自動で指す（ai-gote / ai-vs-ai の初手や連続手にも対応）
+  useEffect(() => {
+    if (gameState.isGameOver) return;
+    if (!isAITurn) return;
+
+    aiTimerRef.current = window.setTimeout(() => {
+      const aiMove = getAIMove(gameState);
+      if (aiMove) {
+        const aiState = executeMove(gameState, aiMove);
+        setLastMove(aiMove);
+        onMove(aiState);
+      }
+      aiTimerRef.current = null;
+    }, 500);
+
+    return () => {
+      if (aiTimerRef.current !== null) {
+        window.clearTimeout(aiTimerRef.current);
+        aiTimerRef.current = null;
+      }
+    };
+  }, [gameState, isAITurn, onMove]);
 
   const applyMove = useCallback((move: Move) => {
     const newState = executeMove(gameState, move);
     setLastMove(move);
     onMove(newState);
-
-    const aiWillMoveNext = !newState.isGameOver && (
-      (newState.currentPlayer === Player.Sente && aiControlsSente)
-      || (newState.currentPlayer === Player.Gote && aiControlsGote)
-    );
-    // AI の番
-    if (aiWillMoveNext) {
-      aiTimerRef.current = window.setTimeout(() => {
-        const aiMove = getAIMove(newState);
-        if (aiMove) {
-          const aiState = executeMove(newState, aiMove);
-          setLastMove(aiMove);
-          onMove(aiState);
-        }
-        aiTimerRef.current = null;
-      }, 500);
-    }
-  }, [gameState, onMove, aiControlsSente, aiControlsGote]);
+  }, [gameState, onMove]);
 
   const handleCellClick = useCallback((row: number, col: number) => {
     if (gameState.isGameOver) return;
