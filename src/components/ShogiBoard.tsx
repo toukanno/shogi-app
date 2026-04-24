@@ -30,8 +30,13 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
     to: Position;
     piece: Piece;
   } | null>(null);
-  const [lastMove, setLastMove] = useState<Move | null>(null);
   const aiTimerRef = useRef<number | null>(null);
+
+  // 直近の手は moveHistory から導出（待った／ロード時にも自動で同期する）
+  const lastMove: Move | null =
+    gameState.moveHistory.length > 0
+      ? gameState.moveHistory[gameState.moveHistory.length - 1]
+      : null;
 
   const cellSize = boardSize / 9;
   const isAITurn = (gameState.currentPlayer === Player.Sente && aiControlsSente)
@@ -47,7 +52,6 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
       const aiMove = getAIMove(gameState);
       if (aiMove) {
         const aiState = executeMove(gameState, aiMove);
-        setLastMove(aiMove);
         onMove(aiState);
       }
       aiTimerRef.current = null;
@@ -63,7 +67,6 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
 
   const applyMove = useCallback((move: Move) => {
     const newState = executeMove(gameState, move);
-    setLastMove(move);
     onMove(newState);
   }, [gameState, onMove]);
 

@@ -56,6 +56,9 @@ Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and
 ### Persistence
 `GameScreen` auto-saves `GameState` to `localStorage` under `shogi-app-save-${gameMode}` (so `pvp`, `ai-sente`, `ai-gote`, `ai-vs-ai` each have an independent save) after every state change, and rehydrates on mount. Reset clears the active key. If you change the `GameState` shape, stale saves will deserialize into the new shape as-is — consider a version key or migration. The previous `shogi-app-save-ai` / `shogi-app-save-pvp` keys are no longer read.
 
+### Undo (待った)
+`GameScreen.handleUndo` rebuilds state by replaying `moveHistory.slice(0, -undoSteps)` through `executeMove` from `createInitialState()`. `undoSteps = 1` for `pvp`, `2` for `ai-sente` / `ai-gote` (so the user lands back on their own turn after rolling back the AI's reply), and `0` for `ai-vs-ai` (button is hidden). The undo button is disabled when there is not enough history. `ShogiBoard` derives the highlighted "last move" directly from `gameState.moveHistory` rather than holding it in local state — this is what makes the highlight follow undos and reload-from-localStorage transitions automatically.
+
 ## Conventions
 
 - **Styling is inline only.** Every component uses `style={{ ... }}` with the shared palette (gold `#ffd700`, wood browns `#6b4c1e` / `#4a3520` / `#2a1810`, red accent `#c41e3a`). `src/styles/theme.ts` exists but components currently don't import it — match existing inline values rather than introducing CSS modules / styled-components.
