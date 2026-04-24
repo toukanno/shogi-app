@@ -1,10 +1,20 @@
 import React from 'react';
+import { AILevel } from '../models/ShogiTypes';
 
 interface MainMenuProps {
   onStartGame: (vsAI: boolean) => void;
+  onOpenTsume: () => void;
+  aiLevel: AILevel;
+  onChangeAILevel: (level: AILevel) => void;
 }
 
-const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
+const AI_LEVEL_LABEL: Record<AILevel, string> = {
+  [AILevel.Easy]: '弱',
+  [AILevel.Normal]: '中',
+  [AILevel.Hard]: '強',
+};
+
+const MainMenu: React.FC<MainMenuProps> = ({ onStartGame, onOpenTsume, aiLevel, onChangeAILevel }) => {
   return (
     <div style={{
       minHeight: '100dvh',
@@ -165,6 +175,50 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
           対局（CPU戦）
         </button>
 
+        {/* CPU 難易度 */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'rgba(42,24,16,0.6)',
+          border: '1px solid #6b4c1e',
+          borderRadius: '10px',
+          padding: '6px 10px',
+        }}>
+          <span style={{
+            color: '#e8d5a8',
+            fontSize: '13px',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            flexShrink: 0,
+          }}>
+            CPU強さ
+          </span>
+          <div style={{ display: 'flex', gap: '4px', flex: 1 }}>
+            {(Object.values(AILevel) as AILevel[]).map(lvl => (
+              <button
+                key={lvl}
+                onClick={() => onChangeAILevel(lvl)}
+                style={{
+                  flex: 1,
+                  padding: '6px 0',
+                  background: aiLevel === lvl
+                    ? 'linear-gradient(180deg, #ffd700 0%, #b8860b 100%)'
+                    : 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+                  border: `1px solid ${aiLevel === lvl ? '#ffd700' : '#6b4c1e'}`,
+                  borderRadius: '6px',
+                  color: aiLevel === lvl ? '#1a0800' : '#e8d5a8',
+                  fontSize: '14px',
+                  fontFamily: '"Noto Sans JP", sans-serif',
+                  fontWeight: aiLevel === lvl ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                }}
+              >
+                {AI_LEVEL_LABEL[lvl]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* 二人対戦 */}
         <button
           onClick={() => onStartGame(false)}
@@ -197,6 +251,40 @@ const MainMenu: React.FC<MainMenuProps> = ({ onStartGame }) => {
         >
           <span style={{ fontSize: '24px' }}>👥</span>
           二人対戦
+        </button>
+
+        {/* 詰将棋クエスト */}
+        <button
+          onClick={onOpenTsume}
+          style={{
+            padding: '16px 32px',
+            background: 'linear-gradient(180deg, #6b4c1e 0%, #4a3520 50%, #2a1810 100%)',
+            border: '2px solid #ffd700',
+            borderRadius: '14px',
+            color: '#ffd700',
+            fontSize: 'clamp(18px, 4vw, 22px)',
+            fontFamily: '"Noto Sans JP", sans-serif',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(255,215,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            letterSpacing: '3px',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 24px rgba(255,215,0,0.3)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(255,215,0,0.2)';
+          }}
+        >
+          <span style={{ fontSize: '24px' }}>♛</span>
+          詰将棋クエスト
         </button>
       </div>
 

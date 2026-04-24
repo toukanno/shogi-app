@@ -1,5 +1,5 @@
 import {
-  PieceType, Player, Piece, Position, Move, GameState, CapturedPieces,
+  PieceType, Player, Piece, Position, Move, GameState, CapturedPieces, AILevel,
   PROMOTION_MAP, canPromote, getBaseType, isPromoted
 } from '../models/ShogiTypes';
 
@@ -518,12 +518,11 @@ function evaluateMove(state: GameState, move: Move): number {
   return score;
 }
 
-// AIの手を取得（評価関数付き）
-export function getAIMove(state: GameState): Move | null {
+// 全ての合法手を列挙
+export function enumerateLegalMoves(state: GameState): Move[] {
   const player = state.currentPlayer;
   const allMoves: Move[] = [];
 
-  // 盤上の駒の移動
   for (let row = 0; row < 9; row++) {
     for (let col = 0; col < 9; col++) {
       const piece = state.board[row][col];
@@ -533,30 +532,13 @@ export function getAIMove(state: GameState): Move | null {
           if (isLegalMove(state.board, { row, col }, to, piece)) {
             const canProm = canPromoteMove(piece, row, to.row);
             const mustProm = mustPromote(piece, to.row);
-
             if (canProm) {
-              // 成る手と成らない手の両方を候補に
-              allMoves.push({
-                from: { row, col },
-                to,
-                piece,
-                promoted: true,
-              });
+              allMoves.push({ from: { row, col }, to, piece, promoted: true });
               if (!mustProm) {
-                allMoves.push({
-                  from: { row, col },
-                  to,
-                  piece,
-                  promoted: false,
-                });
+                allMoves.push({ from: { row, col }, to, piece, promoted: false });
               }
             } else {
-              allMoves.push({
-                from: { row, col },
-                to,
-                piece,
-                promoted: false,
-              });
+              allMoves.push({ from: { row, col }, to, piece, promoted: false });
             }
           }
         }
@@ -564,33 +546,47 @@ export function getAIMove(state: GameState): Move | null {
     }
   }
 
-  // 持ち駒を打つ
   const uniqueCaptured = Array.from(new Set(state.capturedPieces[player]));
   for (const pieceType of uniqueCaptured) {
     const drops = getDropPositions(state.board, pieceType, player);
     for (const pos of drops) {
       const piece: Piece = { type: pieceType, owner: player };
       if (isLegalMove(state.board, null, pos, piece)) {
-        allMoves.push({
-          from: null,
-          to: pos,
-          piece,
-          dropPiece: pieceType,
-        });
+        allMoves.push({ from: null, to: pos, piece, dropPiece: pieceType });
       }
     }
   }
 
+  return allMoves;
+}
+
+// AIの手を取得（評価関数付き、難易度選択可）
+export function getAIMove(state: GameState, level: AILevel = AILevel.Normal): Move | null {
+  const allMoves = enumerateLegalMoves(state);
   if (allMoves.length === 0) return null;
 
-  // 各手を評価してソート
+  // 弱：ほぼランダム（駒取り手があれば半々で拾う程度）
+  if (level === AILevel.Easy) {
+    const captureMoves = allMoves.filter(m => state.board[m.to.row][m.to.col] !== null);
+    if (captureMoves.length > 0 && Math.random() < 0.4) {
+      return captureMoves[Math.floor(Math.random() * captureMoves.length)];
+    }
+    return allMoves[Math.floor(Math.random() * allMoves.length)];
+  }
+
+  // 評価してソート
   const scoredMoves = allMoves.map(move => ({
     move,
     score: evaluateMove(state, move),
   }));
   scoredMoves.sort((a, b) => b.score - a.score);
 
-  // 上位の手からランダムに選択（多少のランダム性を保持）
+  // 強：常に最善手（ランダムなし）
+  if (level === AILevel.Hard) {
+    return scoredMoves[0].move;
+  }
+
+  // 中：上位3手からランダム（従来の挙動）
   const topN = Math.min(3, scoredMoves.length);
   const idx = Math.floor(Math.random() * topN);
   return scoredMoves[idx].move;

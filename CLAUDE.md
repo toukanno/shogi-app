@@ -21,7 +21,7 @@ Do **not** run `npm run eject`.
 
 ## Architecture
 
-Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and swaps between `MainMenu` and `GameScreen`. There is no global store — game state lives in `GameScreen` and is passed down.
+Three-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game' | 'tsume'` state and swaps between `MainMenu`, `GameScreen`, and `TsumeScreen`. There is no global store — game state lives in the screen component and is passed down. `App` also holds the persisted `AILevel` (`shogi-app-ai-level`).
 
 ### Pure logic vs. UI split
 - `src/models/ShogiTypes.ts` — enums (`PieceType`, `Player`), `Piece`/`Position`/`Move`/`GameState`/`CapturedPieces` interfaces, and the `PIECE_NAMES` / `PROMOTION_MAP` / `UNPROMOTION_MAP` lookup tables plus helpers (`canPromote`, `isPromoted`, `getBaseType`). All rule-facing code should import types/helpers from here.
@@ -42,7 +42,17 @@ Two-screen SPA with no router: `src/App.tsx` holds a `'menu' | 'game'` state and
 4. In vsAI mode, after Sente's move, `applyMove` schedules `getAIMove` → `executeMove` with a 500 ms `setTimeout` (tracked in `aiTimerRef` and cleared on unmount). `ShogiBoard` locks input when `currentPlayer === Gote && vsAI` via `isInteractionLocked`.
 
 ### AI
-`getAIMove` enumerates all legal moves (including promote/no-promote variants and drops), scores them with `evaluateMove` (MVV-LVA capture bonus, promotion delta, check bonus, mild positional terms, small random jitter), and picks randomly from the top 3. It is one-ply and intentionally lightweight — keep it fast enough to run synchronously inside the 500 ms delay.
+`getAIMove(state, level)` enumerates all legal moves (via shared `enumerateLegalMoves`), scores them with `evaluateMove` (MVV-LVA capture bonus, promotion delta, check bonus, mild positional terms, small random jitter), and picks based on `AILevel`:
+- `Easy`: random legal move (40% chance of preferring a capture)
+- `Normal`: random from top 3 scored
+- `Hard`: always top-scored
+
+It is one-ply and intentionally lightweight — keep it fast enough to run synchronously inside the 500 ms delay. `ShogiBoard` also has a "rehydrate" effect that schedules the AI move if the board mounts with `currentPlayer === Gote && vsAI && !isGameOver` (recovers a game reloaded mid-AI-turn).
+
+### 詰将棋クエスト (tsume mode)
+- `src/models/TsumeProblem.ts` — problem data (`TsumeProblem` = board + hands + `moves: 1 | 2`). `TSUME_PROBLEMS` is a hand-authored bundle; each problem is validated in `src/TsumeValidation.test.ts` via `findMate`.
+- `src/utils/TsumeLogic.ts` — `findMate` (recursive force-mate search), `isSolutionMove` (strict validator — the move must check and every defender reply must still lead to mate), `chooseDefenderMove` (picks Gote's reply in between turns), plus `loadTsumeProgress` / `markProblemSolved` (`localStorage` key `shogi-app-tsume-progress`).
+- `TsumeScreen` lists problems with ✓ for solved; `TsumePlay` reuses `ShogiBoard` with `vsAI={false}` and orchestrates defender replies itself.
 
 ### Special rules implemented
 - 二歩 (nifu — two pawns on a file) and 打ち歩詰め (uchi-fu-zume — pawn drop mate) are enforced in `getDropPositions`. The latter uses `isCheckmatedOnBoard` with empty captured piece sets, which means it only checks on-board escape moves — be aware if you extend it.

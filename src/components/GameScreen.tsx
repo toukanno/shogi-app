@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, Player, Move, PIECE_NAMES } from '../models/ShogiTypes';
+import { GameState, Player, Move, PIECE_NAMES, AILevel } from '../models/ShogiTypes';
 import { createInitialState } from '../utils/ShogiLogic';
 import ShogiBoard from './ShogiBoard';
 
 interface GameScreenProps {
   vsAI: boolean;
+  aiLevel: AILevel;
   onBack: () => void;
 }
 
-const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
+const GameScreen: React.FC<GameScreenProps> = ({ vsAI, aiLevel, onBack }) => {
   const storageKey = vsAI ? 'shogi-app-save-ai' : 'shogi-app-save-pvp';
   const [gameState, setGameState] = useState<GameState>(() => {
     try {
@@ -182,6 +183,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ vsAI, onBack }) => {
         gameState={gameState}
         onMove={handleMove}
         vsAI={vsAI}
+        aiLevel={aiLevel}
         boardSize={boardSize}
         interactionDisabled={vsAI && gameState.currentPlayer === Player.Gote}
       />

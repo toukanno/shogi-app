@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  Piece, PieceType, Player, Position, GameState, Move
+  Piece, PieceType, Player, Position, GameState, Move, AILevel
 } from '../models/ShogiTypes';
 import {
   getValidMoves, isLegalMove, canPromoteMove, mustPromote,
@@ -14,12 +14,13 @@ interface ShogiBoardProps {
   gameState: GameState;
   onMove: (newState: GameState) => void;
   vsAI: boolean;
+  aiLevel?: AILevel;
   boardSize: number;
   interactionDisabled?: boolean;
 }
 
 const ShogiBoard: React.FC<ShogiBoardProps> = ({
-  gameState, onMove, vsAI, boardSize, interactionDisabled = false,
+  gameState, onMove, vsAI, aiLevel = AILevel.Normal, boardSize, interactionDisabled = false,
 }) => {
   const [selectedPos, setSelectedPos] = useState<Position | null>(null);
   const [selectedDrop, setSelectedDrop] = useState<PieceType | null>(null);
@@ -50,7 +51,7 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
     // AI の番
     if (vsAI && !newState.isGameOver) {
       aiTimerRef.current = window.setTimeout(() => {
-        const aiMove = getAIMove(newState);
+        const aiMove = getAIMove(newState, aiLevel);
         if (aiMove) {
           const aiState = executeMove(newState, aiMove);
           setLastMove(aiMove);
@@ -59,7 +60,28 @@ const ShogiBoard: React.FC<ShogiBoardProps> = ({
         aiTimerRef.current = null;
       }, 500);
     }
-  }, [gameState, onMove, vsAI]);
+  }, [gameState, onMove, vsAI, aiLevel]);
+
+  // リロード復帰時に後手の番なら AI を起動する（リカバリー）
+  useEffect(() => {
+    if (!vsAI) return;
+    if (gameState.currentPlayer !== Player.Gote) return;
+    if (gameState.isGameOver) return;
+    if (aiTimerRef.current !== null) return;
+    // ローディング中の無限ループ防止のため、直前の手が AI 手なら即座にスケジュールしない
+    const last = gameState.moveHistory[gameState.moveHistory.length - 1];
+    if (last && last.piece.owner === Player.Gote) return;
+    aiTimerRef.current = window.setTimeout(() => {
+      const aiMove = getAIMove(gameState, aiLevel);
+      if (aiMove) {
+        const aiState = executeMove(gameState, aiMove);
+        setLastMove(aiMove);
+        onMove(aiState);
+      }
+      aiTimerRef.current = null;
+    }, 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vsAI, gameState.currentPlayer, gameState.isGameOver]);
 
   const handleCellClick = useCallback((row: number, col: number) => {
     if (gameState.isGameOver) return;

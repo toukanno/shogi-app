@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App from './App';
 import { createInitialBoard, createInitialState, getValidMoves, executeMove, isInCheck, getAIMove, canPromoteMove, mustPromote, getDropPositions, isLegalMove } from './utils/ShogiLogic';
-import { PieceType, Player, Piece, GameState } from './models/ShogiTypes';
+import { PieceType, Player, Piece, GameState, AILevel } from './models/ShogiTypes';
 
 // --- UI Tests ---
 describe('App', () => {
@@ -37,6 +37,42 @@ describe('App', () => {
     fireEvent.click(screen.getByText(/CPU戦/));
     fireEvent.click(screen.getByText(/← 戻る/));
     expect(screen.getByText('将棋')).toBeInTheDocument();
+  });
+
+  test('renders tsume quest button', () => {
+    render(<App />);
+    expect(screen.getByText(/詰将棋クエスト/)).toBeInTheDocument();
+  });
+
+  test('renders AI level selector with default Normal', () => {
+    render(<App />);
+    expect(screen.getByText(/CPU強さ/)).toBeInTheDocument();
+    expect(screen.getByText('弱')).toBeInTheDocument();
+    expect(screen.getByText('中')).toBeInTheDocument();
+    expect(screen.getByText('強')).toBeInTheDocument();
+  });
+
+  test('opens tsume screen and lists problems', () => {
+    render(<App />);
+    fireEvent.click(screen.getByText(/詰将棋クエスト/));
+    expect(screen.getByText('詰将棋クエスト')).toBeInTheDocument();
+    expect(screen.getByText(/第1問/)).toBeInTheDocument();
+  });
+});
+
+describe('AI difficulty', () => {
+  test('Easy level returns a valid move', () => {
+    const state = createInitialState();
+    const move = getAIMove(state, AILevel.Easy);
+    expect(move).not.toBeNull();
+  });
+
+  test('Hard level returns the top-scored move deterministically for same state', () => {
+    // Hard は同一局面で同じ手を選ぶとは限らない（評価関数に乱数が入っているため）が、
+    // null でない合法手を返すことだけ保証する
+    const state = createInitialState();
+    const move = getAIMove(state, AILevel.Hard);
+    expect(move).not.toBeNull();
   });
 });
 

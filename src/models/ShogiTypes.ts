@@ -24,6 +24,13 @@ export enum Player {
   Gote = 'gote',    // 後手（上手）
 }
 
+// CPU の強さ
+export enum AILevel {
+  Easy = 'easy',      // 弱（ほぼランダム）
+  Normal = 'normal',  // 中（上位から選択）
+  Hard = 'hard',      // 強（常に最善手）
+}
+
 export interface Piece {
   type: PieceType;
   owner: Player;
