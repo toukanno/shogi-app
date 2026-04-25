@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, Player, Move, PIECE_NAMES } from '../models/ShogiTypes';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  GameState, Player, Move, PIECE_NAMES, PieceType,
+} from '../models/ShogiTypes';
 import { createInitialState, executeMove } from '../utils/ShogiLogic';
 import ShogiBoard from './ShogiBoard';
 import { GameMode } from '../models/GameMode';
@@ -33,6 +35,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
   });
   const [boardSize, setBoardSize] = useState(360);
   const [isSaved, setIsSaved] = useState(false);
+  const [viewMoveIndex, setViewMoveIndex] = useState<number | null>(null);
 
   // レスポンシブ盤面サイズ
   useEffect(() => {
@@ -49,11 +52,13 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
 
   const handleMove = useCallback((newState: GameState) => {
     setGameState(newState);
+    setViewMoveIndex(null);
     setIsSaved(false);
   }, []);
 
   const handleReset = () => {
     setGameState(createInitialState());
+    setViewMoveIndex(null);
     setIsSaved(false);
     localStorage.removeItem(storageKey);
   };
@@ -75,12 +80,34 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
       newState = executeMove(newState, move);
     }
     setGameState(newState);
+    setViewMoveIndex(null);
     setIsSaved(false);
   };
 
   const [showHistory, setShowHistory] = useState(false);
 
   const moveCount = gameState.moveHistory.length;
+  const displayedMoveIndex = viewMoveIndex ?? moveCount;
+  const isReplayMode = displayedMoveIndex !== moveCount;
+
+  const reconstructState = useCallback((movesToApply: number): GameState => {
+    let state = createInitialState();
+    for (let i = 0; i < movesToApply; i += 1) {
+      state = executeMove(state, gameState.moveHistory[i]);
+    }
+    return state;
+  }, [gameState.moveHistory]);
+
+  const displayedState = useMemo(
+    () => reconstructState(displayedMoveIndex),
+    [displayedMoveIndex, reconstructState],
+  );
+
+  useEffect(() => {
+    if (viewMoveIndex !== null && viewMoveIndex > moveCount) {
+      setViewMoveIndex(moveCount);
+    }
+  }, [moveCount, viewMoveIndex]);
 
   useEffect(() => {
     try {
@@ -102,7 +129,88 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
     return `${idx + 1}. ${player}${col}${rowStr}${pieceName}${promoted}${drop}`;
   };
 
-  const currentPlayerLabel = gameState.currentPlayer === Player.Sente ? '☗先手' : '☖後手';
+  const currentPlayerLabel = displayedState.currentPlayer === Player.Sente ? '☗先手' : '☖後手';
+
+  const formatSquare = (row: number, col: number): string => {
+    const colNum = 9 - col;
+    const rowLabels = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    return `${colNum}${rowLabels[row]}`;
+  };
+
+  const nextMove = displayedMoveIndex < moveCount
+    ? gameState.moveHistory[displayedMoveIndex]
+    : null;
+
+  const nextMoveReference = nextMove
+    ? `${nextMove.from
+      ? `${formatSquare(nextMove.from.row, nextMove.from.col)} → `
+      : '持ち駒 → '}${formatSquare(nextMove.to.row, nextMove.to.col)}`
+    : '（最新局面です）';
+
+  const getPieceValue = (type: PieceType): number => {
+    switch (type) {
+      case PieceType.Rook:
+      case PieceType.Bishop:
+        return 8;
+      case PieceType.Gold:
+      case PieceType.PromotedSilver:
+      case PieceType.PromotedKnight:
+      case PieceType.PromotedLance:
+      case PieceType.PromotedPawn:
+        return 5;
+      case PieceType.Silver:
+        return 4;
+      case PieceType.Knight:
+      case PieceType.Lance:
+        return 3;
+      case PieceType.Pawn:
+        return 1;
+      case PieceType.PromotedRook:
+        return 10;
+      case PieceType.PromotedBishop:
+        return 9;
+      case PieceType.King:
+      default:
+        return 0;
+    }
+  };
+
+  const evaluateMaterial = useCallback((state: GameState): number => {
+    let sente = 0;
+    let gote = 0;
+    state.board.forEach((row) => {
+      row.forEach((piece) => {
+        if (!piece) return;
+        const value = getPieceValue(piece.type);
+        if (piece.owner === Player.Sente) sente += value;
+        else gote += value;
+      });
+    });
+
+    state.capturedPieces[Player.Sente].forEach((type) => { sente += getPieceValue(type); });
+    state.capturedPieces[Player.Gote].forEach((type) => { gote += getPieceValue(type); });
+    return sente - gote;
+  }, []);
+
+  const materialTrend = useMemo(() => {
+    const points: number[] = [];
+    for (let i = 0; i <= moveCount; i += 1) {
+      points.push(evaluateMaterial(reconstructState(i)));
+    }
+    return points;
+  }, [moveCount, reconstructState, evaluateMaterial]);
+
+  const chartWidth = 500;
+  const chartHeight = 120;
+  const chartPadding = 14;
+  const maxAbs = Math.max(1, ...materialTrend.map((v) => Math.abs(v)));
+  const graphPath = materialTrend
+    .map((value, index) => {
+      const x = chartPadding + ((chartWidth - chartPadding * 2) * index) / Math.max(1, moveCount);
+      const y = chartHeight / 2 - (value / maxAbs) * ((chartHeight / 2) - chartPadding);
+      return `${index === 0 ? 'M' : 'L'}${x},${y}`;
+    })
+    .join(' ');
 
   return (
     <div style={{
@@ -146,17 +254,17 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
           flex: 1,
         }}>
           <div style={{
-            color: gameState.isCheck ? '#ff4444' : '#ffd700',
+            color: displayedState.isCheck ? '#ff4444' : '#ffd700',
             fontSize: '16px',
             fontFamily: '"Noto Sans JP", sans-serif',
             fontWeight: 'bold',
-            textShadow: gameState.isCheck
+            textShadow: displayedState.isCheck
               ? '0 0 10px rgba(255,68,68,0.5)'
               : '0 0 10px rgba(255,215,0,0.3)',
           }}>
-            {gameState.isCheckmate
-              ? `${gameState.winner === Player.Sente ? '☗先手' : '☖後手'}の勝ち！`
-              : gameState.isCheck
+            {displayedState.isCheckmate
+              ? `${displayedState.winner === Player.Sente ? '☗先手' : '☖後手'}の勝ち！`
+              : displayedState.isCheck
                 ? `${currentPlayerLabel}の番 — 王手！`
                 : `${currentPlayerLabel}の番`}
           </div>
@@ -165,7 +273,7 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
             fontSize: '11px',
             fontFamily: '"Noto Sans JP", sans-serif',
           }}>
-            {modeLabel} · {moveCount}手目 · {isSaved ? '自動保存済み' : '保存中...'}
+            {modeLabel} · {displayedMoveIndex} / {moveCount}手 · {isSaved ? '自動保存済み' : '保存中...'}
           </div>
         </div>
 
@@ -227,18 +335,103 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
         </div>
       </div>
 
+      <div style={{
+        width: '100%',
+        maxWidth: '520px',
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '8px',
+      }}>
+        <button
+          onClick={() => setViewMoveIndex(Math.max(0, displayedMoveIndex - 1))}
+          disabled={displayedMoveIndex === 0}
+          style={{
+            flex: 1,
+            padding: '8px 10px',
+            background: 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+            border: '1px solid #6b4c1e',
+            borderRadius: '8px',
+            color: '#e8d5a8',
+            opacity: displayedMoveIndex === 0 ? 0.4 : 1,
+            cursor: displayedMoveIndex === 0 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          ◀ 戻る手
+        </button>
+        <button
+          onClick={() => setViewMoveIndex(Math.min(moveCount, displayedMoveIndex + 1))}
+          disabled={displayedMoveIndex === moveCount}
+          style={{
+            flex: 1,
+            padding: '8px 10px',
+            background: 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+            border: '1px solid #6b4c1e',
+            borderRadius: '8px',
+            color: '#e8d5a8',
+            opacity: displayedMoveIndex === moveCount ? 0.4 : 1,
+            cursor: displayedMoveIndex === moveCount ? 'not-allowed' : 'pointer',
+          }}
+        >
+          進む手 ▶
+        </button>
+      </div>
+
+      <div style={{
+        width: '100%',
+        maxWidth: '520px',
+        marginBottom: '8px',
+        background: 'linear-gradient(180deg, rgba(42,24,16,0.95) 0%, rgba(26,8,0,0.95) 100%)',
+        borderRadius: '10px',
+        border: '1px solid #6b4c1e',
+        padding: '8px 12px',
+      }}>
+        <div style={{ color: '#ffd700', fontSize: '12px', marginBottom: '4px' }}>次の手の参照先</div>
+        <div style={{ color: '#e8d5a8', fontSize: '13px' }}>
+          {nextMove
+            ? `${formatMove(nextMove, displayedMoveIndex)}（${nextMoveReference}）`
+            : nextMoveReference}
+        </div>
+        <div style={{ color: '#a08050', fontSize: '11px', marginTop: '4px' }}>
+          {isReplayMode ? 'リプレイ中：盤面操作はロックされています' : '最新局面：通常操作できます'}
+        </div>
+      </div>
+
       {/* 盤面 */}
       <ShogiBoard
-        gameState={gameState}
+        gameState={displayedState}
         onMove={handleMove}
         aiControlsSente={aiControlsSente}
         aiControlsGote={aiControlsGote}
         boardSize={boardSize}
         interactionDisabled={
-          (gameState.currentPlayer === Player.Sente && aiControlsSente)
-          || (gameState.currentPlayer === Player.Gote && aiControlsGote)
+          isReplayMode
+          || displayedState.isGameOver
+          || (displayedState.currentPlayer === Player.Sente && aiControlsSente)
+          || (displayedState.currentPlayer === Player.Gote && aiControlsGote)
         }
       />
+
+      <div style={{
+        width: '100%',
+        maxWidth: '520px',
+        marginTop: '8px',
+        background: 'linear-gradient(180deg, rgba(42,24,16,0.95) 0%, rgba(26,8,0,0.95) 100%)',
+        borderRadius: '10px',
+        border: '1px solid #6b4c1e',
+        padding: '8px 10px',
+      }}>
+        <div style={{ color: '#ffd700', fontSize: '12px', marginBottom: '6px' }}>形勢グラフ（駒得: 先手＋ / 後手−）</div>
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} width="100%" height="120" role="img" aria-label="material trend graph">
+          <line x1={chartPadding} y1={chartHeight / 2} x2={chartWidth - chartPadding} y2={chartHeight / 2} stroke="#6b4c1e" strokeDasharray="4 4" />
+          <path d={graphPath} fill="none" stroke="#ffd700" strokeWidth="2.5" />
+          <circle
+            cx={chartPadding + ((chartWidth - chartPadding * 2) * displayedMoveIndex) / Math.max(1, moveCount)}
+            cy={chartHeight / 2 - (materialTrend[displayedMoveIndex] / maxAbs) * ((chartHeight / 2) - chartPadding)}
+            r="4"
+            fill="#ff6b6b"
+          />
+        </svg>
+      </div>
 
       {/* 棋譜パネル */}
       {showHistory && gameState.moveHistory.length > 0 && (
