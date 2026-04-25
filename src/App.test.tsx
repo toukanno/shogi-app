@@ -6,6 +6,10 @@ import { PieceType, Player, Piece, GameState } from './models/ShogiTypes';
 
 // --- UI Tests ---
 describe('App', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   test('renders main menu with title', () => {
     render(<App />);
     expect(screen.getByText('将棋')).toBeInTheDocument();
@@ -39,6 +43,20 @@ describe('App', () => {
     fireEvent.click(screen.getByText(/CPU戦（あなた先手）/));
     fireEvent.click(screen.getByText(/← 戻る/));
     expect(screen.getByText('将棋')).toBeInTheDocument();
+  });
+
+  test('待った button exists in PvP mode and is disabled at start', () => {
+    render(<App />);
+    fireEvent.click(screen.getByText(/二人対戦/));
+    const undoBtn = screen.getByRole('button', { name: '待った' }) as HTMLButtonElement;
+    expect(undoBtn).toBeInTheDocument();
+    expect(undoBtn.disabled).toBe(true);
+  });
+
+  test('待った button is hidden in AI観戦 (ai-vs-ai) mode', () => {
+    render(<App />);
+    fireEvent.click(screen.getByText(/AI観戦（両者CPU）/));
+    expect(screen.queryByRole('button', { name: '待った' })).toBeNull();
   });
 });
 

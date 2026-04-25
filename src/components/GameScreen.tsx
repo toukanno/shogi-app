@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, Player, Move, PIECE_NAMES } from '../models/ShogiTypes';
-import { createInitialState } from '../utils/ShogiLogic';
+import { createInitialState, executeMove } from '../utils/ShogiLogic';
 import ShogiBoard from './ShogiBoard';
 import { GameMode } from '../models/GameMode';
 
@@ -56,6 +56,26 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
     setGameState(createInitialState());
     setIsSaved(false);
     localStorage.removeItem(storageKey);
+  };
+
+  // 待った: AI モードでは AI 手と直前の自分の手をまとめて 2 手戻す。
+  // PvP は 1 手戻す。AI 観戦モードでは無効。
+  const undoSteps = gameMode === 'ai-vs-ai' ? 0 : (gameMode === 'pvp' ? 1 : 2);
+  const canUndo = undoSteps > 0
+    && gameState.moveHistory.length >= undoSteps;
+
+  const handleUndo = () => {
+    if (!canUndo) return;
+    const newHistory = gameState.moveHistory.slice(
+      0,
+      gameState.moveHistory.length - undoSteps,
+    );
+    let newState = createInitialState();
+    for (const move of newHistory) {
+      newState = executeMove(newState, move);
+    }
+    setGameState(newState);
+    setIsSaved(false);
   };
 
   const [showHistory, setShowHistory] = useState(false);
@@ -150,6 +170,26 @@ const GameScreen: React.FC<GameScreenProps> = ({ gameMode, onBack }) => {
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }}>
+          {gameMode !== 'ai-vs-ai' && (
+            <button
+              onClick={handleUndo}
+              disabled={!canUndo}
+              style={{
+                padding: '8px 12px',
+                background: 'linear-gradient(180deg, #4a3520 0%, #2a1810 100%)',
+                border: '1px solid #6b4c1e',
+                borderRadius: '8px',
+                color: '#e8d5a8',
+                fontSize: '14px',
+                fontFamily: '"Noto Sans JP", sans-serif',
+                cursor: canUndo ? 'pointer' : 'not-allowed',
+                opacity: canUndo ? 1 : 0.4,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              }}
+            >
+              待った
+            </button>
+          )}
           <button
             onClick={() => setShowHistory(!showHistory)}
             style={{
